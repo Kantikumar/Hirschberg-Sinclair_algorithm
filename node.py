@@ -7,15 +7,47 @@ def server(ID, IP, Port, LeftIP, LeftPort, RightIP, RightPort):
 	serverSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 	serverSock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 	serverSock.bind((IP, Port))
-	# print LeftIP, " ", LeftPort
+	clientSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+	xorPort = LeftPort ^ RightPort
+	replyCount = 0
+	sendMessage = ""
+	sendPort = 0
 	while True:
 		data = serverSock.recv(1024)
 		message = data.split(":")
-		if int(message[2]) > ID and int(message[4]) <= 2**int(message[3]):
-			recvPort = message[0]
-			msg_type = message[1]
-			k = message[3]
-			d = message[4]
+		if message[1] == "p" and int(message[2]) == ID :
+			print "Leader: " + str(ID)
+		elif message[1] == "p" and int(message[2]) > ID and int(message[4]) <= 2**int(message[3]) :
+			sendMessage = str(Port) + ":p:" + message[2] + ":" + message[3] + ":" + str(int(message[4])+1)
+			sendPort = xorPort ^ int(message[0])
+			if sendPort == LeftPort :
+				sendIP = LeftIP
+			else :
+				sendIP = RightIP
+			clientSock.sendto(sendMessage, (sendIP, sendPort))
+		elif message[1] == "p" and int(message[2]) > ID and int(message[4]) > 2**int(message[3]) :
+			sendMessage = str(Port) + ":r:" + message[2] + ":" + message[3]
+			sendPort = int(message[0])
+			if sendPort == LeftPort :
+				sendIP = LeftIP
+			else :
+				sendIP = RightIP
+			clientSock.sendto(sendMessage, (sendIP, sendPort))
+		elif message[1] == "r" and int(message[2]) != ID :
+			sendMessage = str(Port) + ":r:" + message[2] + ":" + message[3]
+			sendPort = xorPort ^ int(message[0])
+			if sendPort == LeftPort :
+				sendIP = LeftIP
+			else :
+				sendIP = RightIP
+			clientSock.sendto(sendMessage, (sendIP, sendPort))
+		elif message[1] == "r" and int(message[2]) == ID and replyCount==0 :
+			replyCount = replyCount+1
+		elif message[1] == "r" and int(message[2]) == ID and replyCount==1 :
+			replyCount = 0
+			sendMessage = str(Port) + ":p:" + str(ID) + ":" + str(int(message[3])+1) + ":" + "1"
+			clientSock.sendto(sendMessage, (RightIP, RightPort))
+			clientSock.sendto(sendMessage, (LeftIP, LeftPort))
 
 
 
@@ -50,6 +82,7 @@ def main():
 	UID = random.sample(range(1, 1000), number_nodes)
 	for i in UID:
 		print i
+	print "Elected leader should be: " , max(UID)
 	for i in range(number_nodes):
 		IP = InitIp + str(i+1)
 		Port = InitPort + i
